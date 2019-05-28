@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.13)
-project(VK2)
+project(HyperLogLog)
 
 set(CMAKE_CXX_STANDARD 17)
 
-add_executable(VK2 main.cpp)
+add_executable(HyperLogLog main.cpp)
