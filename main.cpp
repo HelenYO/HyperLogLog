@@ -6,22 +6,16 @@
 
 double std_error = 0.1;
 
-
 class UniqCounter {
-
 
 private:
 
+    double  k_norm,  m;
+    unsigned int max_k, k;
+    std::vector<unsigned int> buckets;
 
-    unsigned long long pow_2_32 = 0xFFFFFFFF + 1;
-
-    double m, alpha_m, k;
-    unsigned long long k_comp;
-    std::vector<unsigned long long> M;
-
-
-    unsigned long long rank(unsigned long long hash, long long max) {
-        unsigned long long r = 1;
+    unsigned int rank(unsigned int hash, unsigned int max) {
+        unsigned int r = 1;
         while ((hash & 1) == 0 && r <= max) {
             ++r;
             hash = (hash >> 1);
@@ -29,58 +23,46 @@ private:
         return r;
     }
 
-    unsigned long long fnv1a(int x) {
-        const unsigned FNV_32_PRIME = 0x01000193;
-        unsigned int hval = 0x811c9dc5;
-        hval ^= (unsigned int) x;
-        hval *= FNV_32_PRIME;
-        return hval;
+    unsigned int make_hash(int x) {
+        const unsigned salt = 27644437;
+        unsigned int temp = 2166136261;
+        temp ^= (unsigned int) x;
+        temp *= salt;
+        return temp;
     }
-
 
 public:
 
     UniqCounter() {
-        m = (1.04 / std_error) * 250;//todo::
-        k = ceil(log2(m * m)), k_comp = 32 - static_cast<unsigned long long>(k);
+        double temp = (1.04 / std_error) * 170;
+        k = static_cast<unsigned int>(ceil(log2(temp * temp)));
+        max_k = 32 - k;
         m = pow(2, k);
-
-        alpha_m = m == 16 ? 0.673
-                          : m == 32 ? 0.697
-                                    : m == 64 ? 0.709
-                                              : 0.7213 / (1 + 1.079 / m);
-
-
-        M.resize(static_cast<unsigned long long>(m), 0);
+        k_norm = 0.7213 / (1 + 1.079 / m);
+        buckets.resize(static_cast<unsigned int>(m), 0);
     }
 
     void add(int x) {
-        unsigned long long j = fnv1a(x) >> k_comp;
-        M[j] = std::max(M[j], rank(fnv1a(x), k_comp));
+        unsigned int hash = make_hash(x);
+        unsigned int j = hash >> max_k;
+        buckets[j] = std::max(buckets[j], rank(hash, max_k));
     }
 
     int get_uniq_num() const {
-
-        double c = 0.0;
-        for (unsigned long long i = 0; i < m; ++i) {
-            c += 1 / pow(2, M[i]);
+        double c = 0;
+        for (size_t i = 0; i < m; ++i) {
+            c += 1 / pow(2, buckets[i]);
         }
-        double E = alpha_m * m * m / c;
-
-        if (E <= 2.5 * m) {
-            unsigned long long V = 0;
-            for (unsigned long long i = 0; i < m; ++i) {
-                if (M[i] == 0) {
-                    ++V;
-                }
+        double E = k_norm * m * m / c;
+        unsigned int V = 0;
+        for (size_t i = 0; i < m; ++i) {
+            if (buckets[i] == 0) {
+                ++V;
             }
-            if (V > 0) {
-                E = m * log(m / V);
-            }
-        } else if (E > 1 / 30 * pow_2_32) {
-            E = -pow_2_32 * log(1 - E / pow_2_32);
         }
-
+        if (V > 0) {
+            E = m * log(m / V);
+        }
         return static_cast<int>(E);
     }
 };
@@ -94,6 +76,7 @@ int main() {
     std::mt19937 gen(rd());
 
     const int N = (int) 1e6;
+
     for (int k : {1, 10, 1000, 10000, N / 10, N, N * 10}) {
         std::uniform_int_distribution<> dis(1, k);
         std::set<int> all;
@@ -110,6 +93,5 @@ int main() {
                counter_result, error);
         assert(error <= std_error);
     }
-
     return 0;
 }
